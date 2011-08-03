@@ -195,7 +195,7 @@ class ContextIO {
 		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
-		$params = $this->_filterParams($params, array('email','limit','offset','scope'), array('email'));
+		$params = $this->_filterParams($params, array('email','limit','offset','scope','folder'), array('email'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
@@ -210,7 +210,7 @@ class ContextIO {
 		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
-		$params = $this->_filterParams($params, array('email','limit','offset','scope'), array('email'));
+		$params = $this->_filterParams($params, array('email','limit','offset','scope','folder'), array('email'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
@@ -413,7 +413,7 @@ class ContextIO {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
 		if (is_array($params)) {
-			$params = $this->_filterParams($params, array('subject', 'date_before', 'date_after', 'indexed_after', 'limit', 'offset','email', 'to','from','cc','bcc','email_message_id','type','include_body'));
+			$params = $this->_filterParams($params, array('subject', 'date_before', 'date_after', 'indexed_after', 'limit', 'offset','email', 'to','from','cc','bcc','email_message_id','type','include_body','include_headers','include_flags','folder'));
 			if ($params === false) {
 				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 			}
@@ -660,7 +660,7 @@ class ContextIO {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
 		if (is_array($params)) {
-			$params = $this->_filterParams($params, array('subject', 'indexed_after', 'active_after', 'active_before', 'started_after', 'started_before', 'limit', 'offset','email', 'to','from','cc','bcc'));
+			$params = $this->_filterParams($params, array('subject', 'indexed_after', 'active_after', 'active_before', 'started_after', 'started_before', 'limit', 'offset','email', 'to','from','cc','bcc','folder'));
 			if ($params === false) {
 				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 			}
@@ -731,6 +731,13 @@ class ContextIO {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
 		return $this->get($account);
+	}
+
+	public function deleteAccount($account) {
+		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
+			throw new InvalidArgumentException('account must be string representing accountId');
+		}
+		return $this->delete($account);
 	}
 
 	public function listAccountEmailAddresses($account) {
@@ -967,7 +974,7 @@ class ContextIO {
 		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
-		$params = $this->_filterParams($params, array('filter_to', 'filter_from', 'filter_cc', 'filter_subject', 'filter_thread', 'filter_new_important', 'filter_file', 'filter_file_revisions', 'delay', 'callback_url', 'failure_notif_url','filter_folder_added'), array('callback_url','failure_notif_url'));
+		$params = $this->_filterParams($params, array('filter_to', 'filter_from', 'filter_cc', 'filter_subject', 'filter_thread', 'filter_new_important', 'filter_file', 'filter_file_revisions', 'delay', 'callback_url', 'failure_notif_url','filter_folder_added','filter_folder_removed'), array('callback_url','failure_notif_url'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
@@ -1124,7 +1131,7 @@ class ContextIO {
 		$result = curl_exec($curl);
 		
 		$httpHeadersIn = ($this->saveHeaders) ? $this->responseHeaders : null;
-		$httpHeadersOut = ($this->saveHeaders) ? preg_split('/\\n|\\r/', curl_getinfo($curl, CURLINFO_HEADER_OUT)) : null;
+		$httpHeadersOut = ($this->saveHeaders) ? preg_split('/(\\n|\\r){1,2}/', curl_getinfo($curl, CURLINFO_HEADER_OUT)) : null;
 		
 		$response = new ContextIOResponse(
 			curl_getinfo($curl, CURLINFO_HTTP_CODE),
