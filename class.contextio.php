@@ -85,6 +85,60 @@ class ContextIO {
 
 	/**
 	 *
+	 * @link http://context.io/docs/2.0/connecttokens
+	 */
+	public function listConnectTokens() {
+		return $this->get(null, 'connect_tokens');
+	}
+
+	/**
+	 *
+	 * @link http://context.io/docs/2.0/connecttokens
+	 */
+	public function getConnectToken($params) {
+		if (is_string($params)) {
+			$params = array('token' => $params);
+		}
+		else {
+			$params = $this->_filterParams($params, array('token'));
+			if ($params === false) {
+				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
+			}
+		}
+		return $this->get(null, 'connect_tokens/' . $params['token']);
+	}
+
+	/**
+	 *
+	 * @link http://context.io/docs/2.0/connecttokens
+	 */
+	public function addConnectToken($params=array()) {
+		$params = $this->_filterParams($params, array('service_level','email','callback_url'), array('service_level','callback_url'));
+		if ($params === false) {
+			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
+		}
+		return $this->post(null, 'connect_tokens', $params);
+	}
+
+	/**
+	 *
+	 * @link http://context.io/docs/2.0/connecttokens
+	 */
+	public function deleteConnectToken($params) {
+		if (is_string($params)) {
+			$params = array('token' => $params);
+		}
+		else {
+			$params = $this->_filterParams($params, array('token'), array('token'));
+			if ($params === false) {
+				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
+			}
+		}
+		return $this->delete(null, 'connect_tokens/' . $params['token']);
+	}
+
+	/**
+	 *
 	 * @link http://context.io/docs/2.0/oauthproviders
 	 */
 	public function listOAuthProviders() {
@@ -511,6 +565,86 @@ class ContextIO {
 	}
 
 	/**
+	 * Returns the message source of a message.
+	 * A message can be identified by the value of its Message-ID header
+	 * @link http://context.io/docs/2.0/accounts/messages/source
+	 * @param string $account accountId or email address of the mailbox you want to query
+	 * @param array[string]mixed $params Query parameters for the API call: 'emailMessageId'
+	 * @return ContextIOResponse
+	 */
+	public function getMessageSource($account, $params, $saveAs=null) {
+		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
+			throw new InvalidArgumentException('account must be string representing accountId');
+		}
+		if (is_string($params)) {
+			$url = 'messages/' . $params . '/source';
+		}
+		elseif (array_key_exists('message_id', $params)) {
+			$url = 'messages/' . $params['message_id']. '/source';
+		}
+		elseif (array_key_exists('email_message_id', $params)) {
+			$url = 'messages/' . $params['email_message_id']. '/source';
+		}
+		elseif (array_key_exists('gmail_message_id', $params)) {
+			if (substr($params['gmail_message_id'],0,3) == 'gm-') {
+				$url = 'messages/' . $params['gmail_message_id'] . '/source';
+			}
+			else {
+				$url = 'messages/gm-' . $params['gmail_message_id'] . '/source';
+			}
+		}
+		else {
+			throw new InvalidArgumentException('message_id, email_message_id or gmail_message_id is a required hash key');
+		}
+
+		$consumer = new OAuthConsumer($this->oauthKey, $this->oauthSecret);
+		$baseUrl = $this->build_url('accounts/' . $account . '/' . $url);
+		$req = OAuthRequest::from_consumer_and_token($consumer, null, "GET", $baseUrl);
+		$sig_method = new OAuthSignatureMethod_HMAC_SHA1();
+		$req->sign_request($sig_method, $consumer, null);
+
+		//get data using signed url
+		if ($this->authHeaders) {
+			$curl = curl_init($baseUrl);
+			curl_setopt($curl, CURLOPT_HTTPHEADER, array($req->to_header()));
+		}
+		else {
+			$curl = curl_init($req->to_url());
+		}
+		
+		if ($this->ssl) {
+			curl_setopt($curl, CURLOPT_SSL_VERIFYPEER, false);
+		}
+		
+		curl_setopt($curl, CURLOPT_USERAGENT, 'ContextIOLibrary/2.0 (PHP)');
+
+		if (! is_null($saveAs)) {
+			$fp = fopen($saveAs, "w");
+			curl_setopt($curl, CURLOPT_FILE, $fp);
+			curl_setopt($curl, CURLOPT_HEADER, 0);
+			curl_exec($curl);
+			curl_close($curl);
+			fclose($fp);
+			return true;
+		}
+		curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
+		$result = curl_exec($curl);
+		if (curl_getinfo($curl, CURLINFO_HTTP_CODE) != 200) {
+			$response = new ContextIOResponse(
+				curl_getinfo($curl, CURLINFO_HTTP_CODE),
+				null,
+				null,
+				curl_getinfo($curl, CURLINFO_CONTENT_TYPE),
+				$result);
+			$this->lastResponse = $response;
+			curl_close($curl);
+			return false;
+		}
+		curl_close($curl);
+		return $result;
+	}
+
+	/**
 	 * Returns the message flags of a message.
 	 * A message can be identified by the value of its Message-ID header
 	 * @link http://context.io/docs/2.0/accounts/messages/flags
@@ -788,7 +922,7 @@ class ContextIO {
 
 	public function listAccounts($params=null) {
 		if (is_array($params)) {
-			$params = $this->_filterParams($params, array('limit','offset'));
+			$params = $this->_filterParams($params, array('limit','offset','email'));
 			if ($params === false) {
 				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 			}
