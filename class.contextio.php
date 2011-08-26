@@ -857,7 +857,7 @@ class ContextIO {
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
-		return $this->put($account, '', $params);
+		return $this->post($account, '', $params);
 	}
 
 	public function getAccount($account) {
@@ -911,13 +911,13 @@ class ContextIO {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
 		if (is_string($params)) {
-			return $this->put($account, 'email_addresses/' . $params, array('primary' => 1));
+			return $this->post($account, 'email_addresses/' . $params, array('primary' => 1));
 		}
 		$params = $this->_filterParams($params, array('email_address'), array('email_address'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
-		return $this->put($account, 'email_addresses/' . $params['email_address'], array('primary' => 1));
+		return $this->post($account, 'email_addresses/' . $params['email_address'], array('primary' => 1));
 	}
 
 	public function listAccounts($params=null) {
@@ -944,7 +944,7 @@ class ContextIO {
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
-		return $this->put($account, 'sources/' . $params['label'], $params);
+		return $this->post($account, 'sources/' . $params['label'], $params);
 	}
 
 	public function resetSourceStatus($account, $params) {
@@ -960,7 +960,7 @@ class ContextIO {
 				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 			}
 		}
-		return $this->put($account, 'sources/' . $params['label'], array('status' => 1));
+		return $this->post($account, 'sources/' . $params['label'], array('status' => 1));
 	}
 
 	public function listSources($account) {
@@ -1139,7 +1139,7 @@ class ContextIO {
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
-		return $this->put($account, 'webhooks/' . $params['webhook_id'], $params);
+		return $this->post($account, 'webhooks/' . $params['webhook_id'], $params);
 	}
 
 	/**
@@ -1217,17 +1217,14 @@ class ContextIO {
 	}
 
 	protected function put($account, $action, $parameters=null) {
-		$this->authHeaders = false;
 		return $this->_doCall('PUT', $account, $action, $parameters);
 	}
 
-	protected function post($account, $action, $parameters=null) {
-		$this->authHeaders = false;
+	protected function post($account, $action='', $parameters=null) {
 		return $this->_doCall('POST', $account, $action, $parameters);
 	}
 
-	protected function delete($account, $action, $parameters=null) {
-		$this->authHeaders = false;
+	protected function delete($account, $action='', $parameters=null) {
 		return $this->_doCall('DELETE', $account, $action, $parameters);
 	}
 
@@ -1235,6 +1232,9 @@ class ContextIO {
 		$consumer = new OAuthConsumer($this->oauthKey, $this->oauthSecret);
 		if (! is_null($account)) {
 			$action = 'accounts/' . $account . '/' . $action;
+			if (substr($action,-1) == '/') {
+				$action = substr($action,0,-1);
+			}
 		}
 		$baseUrl = $this->build_url($action);
 		$req = OAuthRequest::from_consumer_and_token($consumer, null, $httpMethod, $baseUrl, $parameters);
@@ -1243,7 +1243,7 @@ class ContextIO {
 
 		//get data using signed url
 		if ($this->authHeaders) {
-			if ($httpMethod == 'GET') {
+			if ($httpMethod != 'POST') {
 				$curl = curl_init((is_null($parameters) || count($parameters) == 0) ? $baseUrl : $baseUrl. '?' . OAuthUtil::build_http_query($parameters));
 			}
 			else {
@@ -1262,8 +1262,15 @@ class ContextIO {
 		curl_setopt($curl, CURLOPT_USERAGENT, 'ContextIOLibrary/2.0 (PHP)');
 
 		if ($httpMethod != 'GET') {
-			curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $httpMethod);
-			curl_setopt($curl, CURLOPT_POSTFIELDS, $parameters);
+			if ($httpMethod == 'POST') {
+				curl_setopt($curl, CURLOPT_POST, true);
+				if (! is_null($parameters)) {
+					curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($parameters));
+				}
+			}
+			else {
+				curl_setopt($curl, CURLOPT_CUSTOMREQUEST, $httpMethod);
+			}
 		}
 		curl_setopt($curl, CURLOPT_RETURNTRANSFER, 1);
 
