@@ -113,7 +113,7 @@ class ContextIO {
 	 * @link http://context.io/docs/2.0/connecttokens
 	 */
 	public function addConnectToken($account=null,$params=array()) {
-		$params = $this->_filterParams($params, array('service_level','email','callback_url','first_name','last_name'), array('callback_url'));
+		$params = $this->_filterParams($params, array('service_level','email','callback_url','first_name','last_name','source_sync_all_folders','source_callback_url'), array('callback_url'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
@@ -479,7 +479,7 @@ class ContextIO {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
 		if (is_array($params)) {
-			$params = $this->_filterParams($params, array('label','folder','limit','offset','type','include_body','include_headers','include_flags','flag_seen'), array('label','folder'));
+			$params = $this->_filterParams($params, array('label','folder','limit','offset','type','include_body','include_headers','include_flags','flag_seen','async','async_job_id'), array('label','folder'));
 			if ($params === false) {
 				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 			}
@@ -488,6 +488,9 @@ class ContextIO {
 		$folder = $params['folder'];
 		unset($params['label']);
 		unset($params['folder']);
+		if (array_key_exists('async_job_id', $params)) {
+			return $this->get($account, "sources/$source/folders/$folder/messages/" . $params['async_job_id']);
+		}
 		return $this->get($account, "sources/$source/folders/$folder/messages", $params);
 	}
 
@@ -515,7 +518,7 @@ class ContextIO {
 		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
-		$params = $this->_filterParams($params, array('dst_label','dst_folder','src_file','message_id','email_message_id','gmail_message_id'), array('dst_label','dst_folder'));
+		$params = $this->_filterParams($params, array('dst_label','dst_folder','src_file','message_id','email_message_id','gmail_message_id','flag_seen','flag_answered','flag_flagged','flag_deleted','flag_draft'), array('dst_label','dst_folder'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
@@ -1104,7 +1107,7 @@ class ContextIO {
 		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
-		$params = $this->_filterParams($params, array('provider_token', 'provider_token_secret', 'password', 'provider_consumer_key', 'label', 'mailboxes', 'sync_all_folders', 'service_level','sync_period'), array('label'));
+		$params = $this->_filterParams($params, array('provider_token', 'provider_token_secret', 'provider_refresh_token', 'password', 'provider_consumer_key', 'label', 'mailboxes', 'sync_all_folders', 'service_level','sync_period'), array('label'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
@@ -1165,7 +1168,7 @@ class ContextIO {
 		if (is_null($account) || ! is_string($account) || (! strpos($account, '@') === false)) {
 			throw new InvalidArgumentException('account must be string representing accountId');
 		}
-		$params = $this->_filterParams($params, array('type','email','server','username','provider_consumer_key','provider_token','provider_token_secret','service_level','sync_period','sync_all_folders','password','use_ssl','port','callback_url'), array('server','username'));
+		$params = $this->_filterParams($params, array('type','email','server','username','provider_consumer_key','provider_token','provider_token_secret','provider_refresh_token','service_level','sync_period','sync_all_folders','password','use_ssl','port','callback_url'), array('server','username'));
 		if ($params === false) {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
@@ -1261,12 +1264,14 @@ class ContextIO {
 			$params = array('label' => $params);
 		}
 		else {
-			$params = $this->_filterParams($params, array('label'), array('label'));
+			$params = $this->_filterParams($params, array('label','include_extended_counts','no_cache'), array('label'));
 			if ($params === false) {
 				throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 			}
 		}
-		return $this->get($account, 'sources/' . $params['label'] . '/folders');
+		$source = $params['label'];
+		unset($params['label']);
+		return $this->get($account, 'sources/' . $source . '/folders', $params);
 	}
 
 	public function listWebhooks($account) {
@@ -1328,6 +1333,16 @@ class ContextIO {
 			throw new InvalidArgumentException("params array contains invalid parameters or misses required parameters");
 		}
 		return $this->post($account, 'webhooks/' . $params['webhook_id'], $params);
+	}
+
+	/**
+	 * Specify the API endpoint.
+	 * @param string $endPoint
+	 * @return boolean success
+	 */
+	public function setEndPoint($endPoint) {
+		$this->endPoint = $endPoint;
+		return true;
 	}
 
 	/**
@@ -1459,7 +1474,14 @@ class ContextIO {
 				curl_setopt($curl, CURLOPT_POST, true);
 				if (! is_null($parameters)) {
 					if (is_null($file)) {
-						curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($parameters));
+						if (is_string($parameters)) {
+							$httpHeadersToSet[] = 'Content-Length: ' . strlen($parameters);
+							$httpHeadersToSet[] = 'Content-Type: application/json';
+							curl_setopt($curl, CURLOPT_POSTFIELDS, $parameters); 
+						}
+						else {
+							curl_setopt($curl, CURLOPT_POSTFIELDS, http_build_query($parameters));
+						}
 					}
 					else {
 						$parameters[$file['field']] = $file['filename'];
@@ -1468,6 +1490,9 @@ class ContextIO {
 				}
 				elseif (! is_null($file)) {
 					curl_setopt($curl, CURLOPT_POSTFIELDS, array($file['field'] => $file['filename']));
+				}
+				else {
+					$httpHeadersToSet[] = 'Content-Length: 0';
 				}
 			}
 			else {
